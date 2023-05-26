@@ -1,12 +1,30 @@
+bootstrap_extensions:
+  - name: envoy.bootstrap.internal_listener
+    typed_config:
+      "@type": type.googleapis.com/envoy.extensions.bootstrap.internal_listener.v3.InternalListener
+
 admin:
   address:
     socket_address: { address: 0.0.0.0, port_value: 9901 }
 
 static_resources:
   listeners:
-    - name: listener1
+    - name: ingress
       address:
-        socket_address: { address: 0.0.0.0, port_value: 51051 }
+        socket_address:
+          protocol: TCP
+          address: 127.0.0.1
+          port_value: 9999
+      filter_chains:
+        - filters:
+            - name: tcp
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
+                stat_prefix: ingress
+                cluster: encap_cluster
+
+    - name: listener1
+      internal_listener: {}
       filter_chains:
         - filters:
             - name: envoy.filters.network.http_connection_manager
@@ -40,6 +58,16 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
 
   clusters:
+    - name: encap_cluster
+      load_assignment:
+        cluster_name: encap_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    envoy_internal_address:
+                      server_listener_name: listener1
+
     - name: grpc
       type: LOGICAL_DNS
       lb_policy: ROUND_ROBIN
